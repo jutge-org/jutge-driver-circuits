@@ -1,0 +1,6 @@
+read_verilog submission/program.v
+
+tee -q synth
+
+stat
+abc -g NAND

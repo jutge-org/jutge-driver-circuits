@@ -1,0 +1,16 @@
+[gold]
+read_verilog ../problem/solution.v
+prep -top top_module
+memory_map
+
+[gate]
+read_verilog ../submission/program.v
+prep -top top_module
+memory_map
+
+[collect *]
+
+[strategy sby]
+use sby
+depth 7
+engine smtbmc bitwuzla

@@ -1,0 +1,2 @@
+read_verilog submission/program.v
+write_verilog -noattr correction/yosys/submission/submission.v
