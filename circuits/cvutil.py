@@ -133,7 +133,9 @@ def write_interface (iface, path):
 def parse_solution_interface_and_synth():
     logging.info('Start of solution interface parsing.')
     try:
-        execute_with_timeout('yosys', 'driver/yosys/yosys_solution_parser_and_synthesis.ys', stdout="correction/yosys/solution/yosys.stdout")        
+        execute_with_timeout('yosys', 'driver/yosys/yosys_solution_parser_and_synthesis.ys', 
+                             stdout="correction/yosys/solution/yosys.stdout", 
+                             stderr="correction/yosys/solution/yosys.stderr")        
         top_module, ifaces = parse_verilog("correction/yosys/solution/solution.v")
         for i in ifaces:
             write_interface(ifaces[i], "correction/yosys/solution/" + i + ".iface")

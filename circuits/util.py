@@ -99,6 +99,11 @@ def file_empty (name):
 def copy_file (src, dst):
     '''Copies a file from src to dst.'''
     shutil.copy(src, dst)
+    
+def move_file(src, dst):
+    '''Moves a file from src to dst.'''
+    shutil.move(src, dst)
+
 
 
 ##############################################################################

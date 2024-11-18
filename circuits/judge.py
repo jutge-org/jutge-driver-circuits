@@ -5,7 +5,6 @@ import sys
 import logging
 import util
 import cvutil
-import synthesizers
 import verifier
 
 
@@ -32,13 +31,14 @@ def judge0 ():
         inf.sub = util.read_yml(inf.dir+'/submission/submission.yml')
         inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')
     except IOError:
-        logging.error("Error on data structures")
+        logging.error("Error on data structures.")
+        logging.info('Writting problem error on correction/compilation2.txt.')
+        util.copy_file('correction/yosys/solution/yosys.stderr', 'correction/compilation2.txt') 
         raise
 
     inf.env = {
         'hostname': util.hostname(),
         'username': util.username(),
-        # 'slave_id': sys.argv[1],
         'time_beg': util.current_time(),
         'uname':    ' '.join(os.uname()),
         'loadavg':  "%.2f %.2f %.2f" % os.getloadavg(),
@@ -51,9 +51,9 @@ def judge0 ():
         'handler':     inf.hdl,
         'environment': inf.env,
         'veredict':    'IE',
-        'synthesis':   {},
         'interface':   {},
         'statistics':  {},
+        'trace_files': [],
     }
     try:
         c = synthesis()
@@ -61,16 +61,30 @@ def judge0 ():
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
 
         if c: # Run correction only if synthesis was successful
-            logging.info('Start of correction step')
+            logging.info('Start of correction step.')
             c = interface()
             if c: # Run verifier only if interface matched
                 c = verification()
                 collect_statistcs()
-                # dump_cleanup()
-            if c: # Remove trash if circuit was AC, leave logs otherwise
-                cleanup()
+                
+                if not c:
+                    logging.info('Error on submission verification.')
+                    logging.info('Writting traces to correction/.')
+                    move_trace_files()
+                    
+            else:
+                logging.info('Error on submission interface.')
+                logging.info('Writting differences on correction/compilation1.txt.')
+                util.copy_file('correction/interface.txt', 'correction/compilation1.txt') 
+                
+            cleanup()
+                
             inf.env['time_end'] = util.current_time()
-            logging.info('End of correction step')
+            logging.info('End of correction step.')
+        else:
+            logging.info('Synthesis was not successfull.')
+            logging.info('Writting synthesis error on correction/compilation1.txt.')
+            util.copy_file('correction/yosys/submission/synthesis.stderr', 'correction/compilation1.txt') 
             
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
@@ -84,6 +98,32 @@ def judge0 ():
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
         logging.info('End of judge0()')
 
+
+
+def synthesis ():
+    """Run the synthesizer on the student's file."""
+    global inf
+
+    logging.info('Start of synthesis process.')
+    try:
+        try:    
+            cvutil.execute_with_timeout('yosys', 'driver/yosys/yosys_submission_synthesis.ys', 
+                                 stdout="correction/yosys/submission/synthesis.stdout", 
+                                 stderr="correction/yosys/submission/synthesis.stderr")
+        except TimeoutError:
+            return False
+
+        ok = util.file_empty('correction/yosys/submission/synthesis.stderr')
+        
+        if not ok:
+            inf.cor['veredict'] = 'CE'
+            
+        return ok
+
+    finally:
+        logging.info('End of synthesis process.')
+        
+        
 def interface():
     """Check wheter the student's module interface matches that of the teacher."""
     global inf
@@ -105,32 +145,6 @@ def interface():
     finally:
         logging.info('End of interface verification')
 
-
-def synthesis ():
-    """Run the synthesizer on the student's file."""
-    global inf
-
-    logging.info('Start of synthesis process.')
-    try:
-        myinf = inf.cor['synthesis']
-        myinf['synthesizers'] = syns = get('compilers', 'any')
-        myinf['synthesizer'] = syn = get('compiler_id')
-
-        if syns!='any' and syn not in syns:
-            raise Exception('invalid synthesizer_id (%s)' % syn)
-
-        syn = synthesizers.synthesizer(syn, inf.hdl)
-
-        ok = syn.synthesize()
-
-        if not ok:
-            inf.cor['veredict'] = 'CE'
-            
-        return ok
-
-    finally:
-        logging.info('End of synthesis process.')
-        
 
 def verification ():
     """Run the verifier."""
@@ -168,9 +182,13 @@ def verification ():
 def collect_statistcs():
     """Collects the statistical values from the solution and submission."""
     global inf
+    logging.info('Start of collect_statistics()')
 
-    inf.cor['statistics'] = cvutil.get_submission_stats()
-
+    try:
+        inf.cor['statistics'] = cvutil.get_submission_stats()
+        
+    finally:
+        logging.info('End of collect_statistics()')
 
 def get (opt, default=None):
     global inf
@@ -186,6 +204,32 @@ def get (opt, default=None):
     logging.info('using value %s for option %s from %s' % (str(val), opt, whe))
     return val
 
+def move_trace_files():
+    """Move the generate trace files into correction/ folder."""
+    global inf
+    logging.info('Start of move_trace_files()')
+
+    try:
+        svg_files = [f for f in os.listdir('correction/traces/') if f.endswith('.svg')]
+        json_files = [f for f in os.listdir('correction/traces/') if f.endswith('.json')]
+
+        for i, file in enumerate(svg_files, start=1):
+            src_path = os.path.join('correction/traces/', file)
+            dest_path = os.path.join('correction/', f"trace{i}.svg")
+            util.move_file(src_path, dest_path)
+            logging.info('Moving ' + src_path + ' to ' + dest_path + '.')
+            inf.cor['trace_files'].append(dest_path)
+
+        for i, file in enumerate(json_files, start=1):
+            src_path = os.path.join('correction/traces/', file)
+            dest_path = os.path.join('correction/', f"trace{i}.json")
+            util.move_file(src_path, dest_path)
+            logging.info('Moving ' + src_path + ' to ' + dest_path + '.')
+            inf.cor['trace_files'].append(dest_path)
+        
+    finally:
+        logging.info('End of move_trace_files()')
+
 def cleanup ():
     """Delete files that are unnecessary if all went well."""
     global inf
@@ -199,7 +243,7 @@ def cleanup ():
         logging.info('End of cleanup()')
 
 def dump_cleanup():
-    """Delete files that are unnecessary."""
+    """Delete files all the stack trace from yosys."""
     global inf
     logging.info('Start of dump_cleanup()')
     try:
