@@ -74,9 +74,10 @@ def judge0 ():
                     
             else:
                 logging.info('Error on submission interface.')
-                logging.info('Writting differences on correction/compilation1.txt.')
-                util.copy_file('correction/interface.txt', 'correction/compilation1.txt') 
-                inf.cor['trace_files'].append('correction/compilation1.txt')
+                logging.info('Writting interface differences on correction/interface.diff.')
+                util.write_file('correction/compilation1.txt', 'Interface missmatch.')
+                util.copy_file('correction/interface.txt', 'correction/interface.diff')
+                inf.cor['trace_files'].append('correction/interface.diff')
                 
             cleanup()
                 
@@ -98,6 +99,8 @@ def judge0 ():
         logging.info('Veredict: ' + inf.cor['veredict'])
         logging.info('Writing correction')
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
+        logging.info('Copying submision to /correction/program.v')
+        util.copy_file('submission/program.v', 'correction/program.v') 
         logging.info('End of judge0()')
 
 
