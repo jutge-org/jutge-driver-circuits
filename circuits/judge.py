@@ -259,6 +259,7 @@ def create_directory_structure():
     util.mkdir("correction/yosys/solution")
 
 if __name__ == '__main__':
+    os.environ["PATH"] += os.pathsep + "/opt/oss-cad-suite/bin"
     try:
         util.init_logging()
         judge0()
