@@ -32,7 +32,7 @@ def judge0 ():
         inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')
     except IOError:
         logging.error("Error on data structures.")
-        logging.info('Writting problem error on correction/compilation2.txt.')
+        logging.error('Writting problem error on correction/compilation2.txt.')
         util.copy_file('correction/yosys/solution/yosys.stderr', 'correction/compilation2.txt') 
         raise
 
@@ -76,6 +76,7 @@ def judge0 ():
                 logging.info('Error on submission interface.')
                 logging.info('Writting differences on correction/compilation1.txt.')
                 util.copy_file('correction/interface.txt', 'correction/compilation1.txt') 
+                inf.cor['trace_files'].append('correction/compilation1.txt')
                 
             cleanup()
                 
@@ -85,6 +86,7 @@ def judge0 ():
             logging.info('Synthesis was not successfull.')
             logging.info('Writting synthesis error on correction/compilation1.txt.')
             util.copy_file('correction/yosys/submission/synthesis.stderr', 'correction/compilation1.txt') 
+            inf.cor['trace_files'].append('correction/compilation1.txt')
             
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
@@ -97,7 +99,6 @@ def judge0 ():
         logging.info('Writing correction')
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
         logging.info('End of judge0()')
-
 
 
 def synthesis ():
