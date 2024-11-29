@@ -75,7 +75,7 @@ def judge0 ():
             else:
                 logging.info('Error on submission interface.')
                 logging.info('Writting interface differences on correction/interface.diff.')
-                util.write_file('correction/compilation1.txt', 'Interface missmatch.')
+                util.write_file('correction/compilation1.txt', 'Interface mismatch.')
                 util.copy_file('correction/interface.txt', 'correction/interface.diff')
                 inf.cor['trace_files'].append('correction/interface.diff')
                 
