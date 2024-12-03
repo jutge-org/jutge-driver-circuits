@@ -20,7 +20,6 @@ RST_PORT_NAME = 'rst'
 DONTCARE_PORT_NAME = '_DontCare'
 DONTCARE_PREFIX = '_DontCare_'
 
-# Avoid choosing any of these as identifiers in generated NuSMV source
 NUSMV_KEYWORDS = frozenset([
 	"MODULE", "DEFINE", "MDEFINE", "CONSTANTS", "VAR", "IVAR", "FROZENVAR",
 	"INIT", "TRANS", "INVAR", "SPEC", "CTLSPEC", "LTLSPEC", "PSLSPEC", "COMPUTE",
@@ -83,13 +82,39 @@ class Interface:
             self.outputs.remove(p)
         del self.ports[name]
 
+
+
+def parse_top_module(stdout_path, verilog_path):
+    '''Parses a top module using the Yosys output if possible, 
+       otherwise returns the first module name on the verilog file.'''
+    with open(stdout_path, 'r') as file:
+        content = file.read()
+    
+    hierarchy_start = content.find("=== design hierarchy ===")
+    if hierarchy_start != -1:
+        hierarchy_content = content[hierarchy_start + len("=== design hierarchy ==="):].strip()
+        lines = hierarchy_content.splitlines()
+        for line in lines:
+            if line.strip():
+                return re.split(r'\s+', line.strip())[0]
+
+    module_pattern = re.compile(r'module\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
+
+    with open(verilog_path, "r") as file:
+        for line in file:
+            m = module_pattern.match(line)
+            if m: 
+                return m.group(1) # module name
+                
+    return None
+
+        
 def parse_verilog(path):
-    '''Parses a interface file and returns a Interface object with its contents.'''
+    '''Parses a verilog file and returns a list of its modules.'''
     module_pattern = re.compile(r'module\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
     port_pattern = re.compile(r'^\s*(input|output)\s*(\[\s*(\d+)\s*:\s*(\d+)\s*\])?\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*;')
     
     name = None
-    top_module = None
     ifaces = {}
     with open(path, "r") as file:
         for line in file:
@@ -97,8 +122,6 @@ def parse_verilog(path):
             if m: 
                 name = m.group(1)
                 if not name in ifaces:
-                    if (len(ifaces) == 0):
-                        top_module = name
                     ifaces[name] = Interface(name)
             
             p = port_pattern.match(line)
@@ -109,9 +132,10 @@ def parse_verilog(path):
                     lsb = int(p.group(4)) #least significant bit
                     size = msb - lsb + 1
                 
-                ifaces[name].add_port(name=p.group(5), dir=p.group(1), width=size)
+                if not '_DontCare' in p.group(5):
+                    ifaces[name].add_port(name=p.group(5), dir=p.group(1), width=size)
 
-    return top_module, ifaces
+    return ifaces
 
 def write_interface (iface, path):
     '''Writes a Interface object to a file.'''
@@ -136,7 +160,8 @@ def parse_solution_interface_and_synth():
         execute_with_timeout('yosys', 'driver/yosys/yosys_solution_parser_and_synthesis.ys', 
                              stdout="correction/yosys/solution/yosys.stdout", 
                              stderr="correction/yosys/solution/yosys.stderr")        
-        top_module, ifaces = parse_verilog("correction/yosys/solution/solution.v")
+        top_module = parse_top_module("correction/yosys/solution/yosys.stdout", "correction/yosys/solution/solution.v")
+        ifaces = parse_verilog("correction/yosys/solution/solution.v")
         for i in ifaces:
             write_interface(ifaces[i], "correction/yosys/solution/" + i + ".iface")
         write_interface(ifaces[top_module], "correction/yosys/solution/top_module.iface")
@@ -147,20 +172,23 @@ def parse_solution_interface_and_synth():
     logging.info('End of solution interface parsing.')
     return ifaces[top_module]
 
-def parse_submission_interface():
+def parse_submission_interface(top_module):
     logging.info('Start of submission interface parsing.')
     try:    
         execute_with_timeout('yosys', 'driver/yosys/yosys_submission_parser.ys', stdout="correction/yosys/submission/yosys.stdout")        
-        top_module, ifaces = parse_verilog("correction/yosys/submission/submission.v")
+        ifaces = parse_verilog("correction/yosys/submission/submission.v")
         for i in ifaces:
             write_interface(ifaces[i], "correction/yosys/submission/" + i + ".iface")
+        
+        if not top_module in ifaces:
+            top_module = parse_top_module("correction/yosys/submission/synthesis.stdout", "correction/yosys/submission/submission.v")
         write_interface(ifaces[top_module], "correction/yosys/submission/top_module.iface")
 
     except TimeoutError:
         logging.error('Yosys took too long to parse the file.')
         return False
     logging.info('End of submission interface parsing.')
-    return ifaces[top_module]
+    return True
 
 class Traits:
     """A circuit's traits (properties)."""

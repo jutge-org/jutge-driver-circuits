@@ -241,11 +241,6 @@ def generate_json_from_vcd(file_path):
                     
                 elif (wire_number in output_gate_wires):
                     output_gate_values[output_gate_wires[wire_number]] = int(wire_value[1:], 2)
-                    
-    print("results")
-    print(input_values)
-    print(output_gold_values)
-    print(output_gate_values)
 
     if (not input_values and not output_gate_values and not output_gold_values):
         return False

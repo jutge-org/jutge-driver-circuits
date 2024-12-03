@@ -1,12 +1,16 @@
 [gold]
-read_verilog ../problem/solution.v
+read_verilog -sv ../problem/solution.v
 prep -top top_module
 memory_map
+select -module top_module 
+delete *_DontCare*
 
 [gate]
-read_verilog ../submission/program.v
+read_verilog -sv ../submission/program.v
 prep -top top_module
 memory_map
+select -module top_module 
+delete *_DontCare*
 
 [collect *]
 

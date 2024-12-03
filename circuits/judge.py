@@ -134,7 +134,7 @@ def interface():
 
     logging.info('Start of interface verification')
     try:
-        inf.cor['interface'] = cvutil.parse_submission_interface()
+        cvutil.parse_submission_interface(inf.iface.name)
 
         # Use diff to stop if any differences are found
         r = os.system('diff correction/yosys/solution/top_module.iface correction/yosys/submission/top_module.iface > correction/interface.txt')
@@ -239,9 +239,9 @@ def cleanup ():
     global inf
     logging.info('Start of cleanup()')
     try:
-        dump_cleanup()
-        util.del_dir('correction/yosys/')
-        util.del_file('correction/interface.txt')
+        # dump_cleanup()
+        # util.del_dir('correction/yosys/')
+        # util.del_file('correction/interface.txt')
         util.del_file('driver/yosys/' + inf.iface.name + '.eqy')
     finally:
         logging.info('End of cleanup()')

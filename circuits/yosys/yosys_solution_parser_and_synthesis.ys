@@ -1,7 +1,8 @@
-read_verilog problem/solution.v
+read_verilog -sv problem/solution.v
+
 write_verilog -noattr correction/yosys/solution/solution.v
 
-tee -q synth
+tee -q synth -auto-top
 
 stat
 abc -g NAND
