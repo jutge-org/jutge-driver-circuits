@@ -55,6 +55,10 @@ def judge0 ():
         'statistics':  {},
         'trace_files': [],
     }
+    
+    logging.info('Copying submision to /correction/program.v')
+    util.copy_file('submission/program.v', 'correction/program.v') 
+    
     try:
         c = synthesis()
         inf.env['time_end'] = util.current_time()
@@ -65,7 +69,7 @@ def judge0 ():
             c = interface()
             if c: # Run verifier only if interface matched
                 c = verification()
-                collect_statistcs()
+                if c: collect_statistcs()
                 
                 if not c:
                     logging.info('Error on submission verification.')
@@ -89,18 +93,22 @@ def judge0 ():
             util.copy_file('correction/yosys/submission/synthesis.stderr', 'correction/compilation1.txt') 
             inf.cor['trace_files'].append('correction/compilation1.txt')
             
+    except cvutil.TimeoutException:
+        logging.info("Timeout exception catched.")
+        inf.cor['veredict'] = 'EE'
+    
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
         inf.cor['veredict'] = 'IE'
         inf.cor['internal-error'] = 'exception'
         inf.cor['traceback'] = util.exc_traceback()
         raise
+    
     finally:
         logging.info('Veredict: ' + inf.cor['veredict'])
         logging.info('Writing correction')
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
-        logging.info('Copying submision to /correction/program.v')
-        util.copy_file('submission/program.v', 'correction/program.v') 
+
         logging.info('End of judge0()')
 
 
@@ -176,9 +184,9 @@ def verification ():
             return False
         
     except cvutil.TimeoutException:
-        logging.info("Verification too long.")
+        logging.info("Verification took too long.")
         inf.cor['veredict'] = 'EE'
-        return False
+        raise cvutil.TimeoutException
     
     finally:
         logging.info('End of verification process')

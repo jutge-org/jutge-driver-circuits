@@ -9,7 +9,7 @@ import subprocess
 import time
 
 # Default timeout for an executed command
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = 20
 
 # Exceptions
 class TimeoutException (Exception): pass

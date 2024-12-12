@@ -14,7 +14,7 @@ delete *_DontCare*
 
 [collect *]
 
-[strategy sby]
+[strategy induction]
 use sby
 depth 7
 engine smtbmc bitwuzla

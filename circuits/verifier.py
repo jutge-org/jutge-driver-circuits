@@ -33,10 +33,12 @@ def execute_verifier (module):
     
     os.chdir('correction')
     test_file_path = '../driver/yosys/' + module + '.eqy'
+    
     cvutil.execute_with_timeout('eqy', test_file_path, 
-                        timeout=20,
-                        stdout="yosys/eqy.stdout", 
-                        stderr="yosys/eqy.stderr")
+                    timeout=20,
+                    stdout="yosys/eqy.stdout", 
+                    stderr="yosys/eqy.stderr")
+    
     logging.info("End of Yosys-Eqy execution.")
     
     with open('yosys/eqy.stdout', 'r') as file:
@@ -241,6 +243,11 @@ def generate_json_from_vcd(file_path):
                     
                 elif (wire_number in output_gate_wires):
                     output_gate_values[output_gate_wires[wire_number]] = int(wire_value[1:], 2)
+                    
+    # print("results")
+    # print(input_values)
+    # print(output_gold_values)
+    # print(output_gate_values)
 
     if (not input_values and not output_gate_values and not output_gold_values):
         return False
