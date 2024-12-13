@@ -96,6 +96,11 @@ def judge0 ():
     except cvutil.TimeoutException:
         logging.info("Timeout exception catched.")
         inf.cor['veredict'] = 'EE'
+        
+    except cvutil.SubmissionException:
+        logging.info("Submission exception catched.")
+        inf.cor['veredict'] = 'CE'
+        util.write_file('correction/compilation1.txt', 'Unable to find a module with content in your design.')
     
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
@@ -154,6 +159,10 @@ def interface():
             return False
         else:
             raise Exception(util.read_file('interface.txt'))
+    except cvutil.SubmissionException:
+        logging.info('Submission error on interface checking. Unable to locate top module.')
+        raise cvutil.SubmissionException
+    
     finally:
         logging.info('End of interface verification')
 
@@ -185,7 +194,6 @@ def verification ():
         
     except cvutil.TimeoutException:
         logging.info("Verification took too long.")
-        inf.cor['veredict'] = 'EE'
         raise cvutil.TimeoutException
     
     finally:
@@ -212,7 +220,7 @@ def get (opt, default=None):
     else: val, whe = default, 'default'
     if val is None:
         raise Exception('missing option (%s)' % opt)
-    info = str(val) + ' ('+whe+')'
+
     logging.info('using value %s for option %s from %s' % (str(val), opt, whe))
     return val
 
@@ -247,9 +255,9 @@ def cleanup ():
     global inf
     logging.info('Start of cleanup()')
     try:
-        # dump_cleanup()
-        # util.del_dir('correction/yosys/')
-        # util.del_file('correction/interface.txt')
+        dump_cleanup()
+        util.del_dir('correction/yosys/')
+        util.del_file('correction/interface.txt')
         util.del_file('driver/yosys/' + inf.iface.name + '.eqy')
     finally:
         logging.info('End of cleanup()')

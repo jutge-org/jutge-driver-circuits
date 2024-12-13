@@ -13,7 +13,7 @@ DEFAULT_TIMEOUT = 20
 
 # Exceptions
 class TimeoutException (Exception): pass
-
+class SubmissionException (Exception): pass
 
 CLK_PORT_NAME = 'clk'
 RST_PORT_NAME = 'rst'
@@ -182,6 +182,9 @@ def parse_submission_interface(top_module):
         
         if not top_module in ifaces:
             top_module = parse_top_module("correction/yosys/submission/synthesis.stdout", "correction/yosys/submission/submission.v")
+            if not top_module:
+                raise SubmissionException
+            
         write_interface(ifaces[top_module], "correction/yosys/submission/top_module.iface")
 
     except TimeoutError:
