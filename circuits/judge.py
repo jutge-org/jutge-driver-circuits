@@ -54,6 +54,7 @@ def judge0 ():
         'interface':   {},
         'statistics':  {},
         'trace_files': [],
+        'graph_files': [],
     }
     
     logging.info('Copying submision to /correction/program.v')
@@ -69,7 +70,7 @@ def judge0 ():
             c = interface()
             if c: # Run verifier only if interface matched
                 c = verification()
-                if c: collect_statistcs()
+                if c: collect_statistics_and_graphs()
                 
                 if not c:
                     logging.info('Error on submission verification.')
@@ -199,13 +200,14 @@ def verification ():
     finally:
         logging.info('End of verification process')
 
-def collect_statistcs():
-    """Collects the statistical values from the solution and submission."""
+def collect_statistics_and_graphs():
+    """Collects the statistical values from the solution and submission and 
+        generates the svg files of the modules of the submission."""
     global inf
     logging.info('Start of collect_statistics()')
 
     try:
-        inf.cor['statistics'] = cvutil.get_submission_stats()
+        inf.cor['graph_files'] = cvutil.get_submission_stats_and_graphs()
         
     finally:
         logging.info('End of collect_statistics()')
@@ -276,6 +278,7 @@ def create_directory_structure():
     util.mkdir("correction/")
     util.mkdir("correction/yosys/")
     util.mkdir("correction/yosys/submission")
+    util.mkdir("correction/graphs")
     util.mkdir("correction/yosys/solution")
 
 if __name__ == '__main__':

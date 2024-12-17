@@ -16,5 +16,5 @@ delete *_DontCare*
 
 [strategy induction]
 use sby
-depth 7
-engine smtbmc bitwuzla
+depth 10
+engine smtbmc z3

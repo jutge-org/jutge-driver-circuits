@@ -241,30 +241,49 @@ def detect_circuit_traits(iface):
 
     return traits
 
-def get_submission_stats():
-    totals = {
-        "NANDs": 0,
-        "Internal Signals": 0,
-        "Number of cells": 0
-    }
+def get_submission_stats_and_graphs():
+    submission_dir = "correction/yosys/submission/"
+    statistics_graphs_file = "driver/yosys/statistics_graphs.ys"
+    output_dir = "correction/graphs/"
 
-    patterns = [
-        (r"NAND cells:\s+(\d+)", "NANDs"),
-        (r"internal signals:\s+(\d+)", "Internal Signals"),
-        (r"Number of cells:\s+(\d+)", "Number of cells")
-    ]
-    
-    with open("correction/yosys/submission/synthesis.stdout", "r") as file:
-        lines = file.readlines()
+    os.makedirs(output_dir, exist_ok=True)
 
-    for line in lines:
-        for pattern, label in patterns:
-            match = re.search(pattern, line)
-            if match:
-                value = int(match.group(1))
-                totals[label] += value
+    output_paths = []
 
-    return totals
+    for file_name in os.listdir(submission_dir):
+        if file_name.endswith(".iface") and file_name != "top_module.iface":
+            
+            json_file = os.path.join(submission_dir, file_name.replace(".iface", ".json"))
+            svg_file = os.path.join(output_dir, file_name.replace(".iface", ".svg"))
+            
+            # Prepare the script file
+            with open(statistics_graphs_file, 'r') as original_file:
+                temp_yosys_script = os.path.join(submission_dir, file_name + "-statistics_graph.ys")
+                with open(temp_yosys_script, 'w') as temp_file:
+                    for line in original_file:
+                        temp_file.write(line.replace("top_module", file_name.replace(".iface", "")))
+
+            # Execute the script (leaves a .json description of the interface)
+            try:
+                execute_with_timeout(
+                    'yosys', temp_yosys_script, 
+                    stdout=os.path.join(submission_dir, "stats.stdout"),
+                    stderr=os.path.join(submission_dir, "stats.stderr")
+                )
+            except TimeoutError:
+                logging.error(f"Timeout error during processing of {file_name}")
+                continue
+
+            # Generate the SVG file from the JSON output
+            try:
+                os.system('netlistsvg ' + json_file + ' -o ' + svg_file)
+                output_paths.append(svg_file)
+            except Exception as e:
+                logging.error(f"Failed to generate SVG for {json_file}: {e}")
+
+            os.remove(temp_yosys_script)
+
+    return output_paths
 
 def execute_with_timeout (cmd, args, timeout=DEFAULT_TIMEOUT, stdout=None, stderr=None):
     """Executes the command cmd with arguments args, limiting the execution time."""
