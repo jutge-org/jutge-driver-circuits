@@ -7,6 +7,7 @@ import operator
 import shlex
 import subprocess
 import time
+import util
 
 # Default timeout for an executed command
 DEFAULT_TIMEOUT = 20
@@ -14,6 +15,7 @@ DEFAULT_TIMEOUT = 20
 # Exceptions
 class TimeoutException (Exception): pass
 class SubmissionException (Exception): pass
+class SetterException (Exception): pass
 
 CLK_PORT_NAME = 'clk'
 RST_PORT_NAME = 'rst'
@@ -98,7 +100,7 @@ def parse_top_module(stdout_path, verilog_path):
             if line.strip():
                 return re.split(r'\s+', line.strip())[0]
 
-    module_pattern = re.compile(r'module\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
+    module_pattern = re.compile(r'module\s+\\?([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
 
     with open(verilog_path, "r") as file:
         for line in file:
@@ -111,7 +113,8 @@ def parse_top_module(stdout_path, verilog_path):
         
 def parse_verilog(path):
     '''Parses a verilog file and returns a list of its modules.'''
-    module_pattern = re.compile(r'module\s+([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
+
+    module_pattern = re.compile(r'module\s+\\?([a-zA-Z_][a-zA-Z_0-9]*)\s*\(')
     port_pattern = re.compile(r'^\s*(input|output)\s*(\[\s*(\d+)\s*:\s*(\d+)\s*\])?\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*;')
     
     name = None
@@ -123,13 +126,13 @@ def parse_verilog(path):
                 name = m.group(1)
                 if not name in ifaces:
                     ifaces[name] = Interface(name)
-            
+                    
             p = port_pattern.match(line)
             if p:
                 size = 1  # default size
-                if p.group(2):  
-                    msb = int(p.group(3)) #most significant bit
-                    lsb = int(p.group(4)) #least significant bit
+                if p.group(2): 
+                    msb = int(p.group(3))  # most significant bit
+                    lsb = int(p.group(4))  # least significant bit
                     size = msb - lsb + 1
                 
                 if not '_DontCare' in p.group(5):
@@ -156,12 +159,20 @@ def write_interface (iface, path):
 
 def parse_solution_interface_and_synth():
     logging.info('Start of solution interface parsing.')
+    solution_synthesized = "correction/yosys/solution/solution.v"
     try:
         execute_with_timeout('yosys', 'driver/yosys/yosys_solution_parser_and_synthesis.ys', 
                              stdout="correction/yosys/solution/yosys.stdout", 
-                             stderr="correction/yosys/solution/yosys.stderr")        
-        top_module = parse_top_module("correction/yosys/solution/yosys.stdout", "correction/yosys/solution/solution.v")
-        ifaces = parse_verilog("correction/yosys/solution/solution.v")
+                             stderr="correction/yosys/solution/yosys.stderr")
+        
+        if not util.file_exists(solution_synthesized) or util.file_empty(solution_synthesized):
+            raise SetterException    
+
+        top_module = parse_top_module("correction/yosys/solution/yosys.stdout", solution_synthesized)
+        if not top_module:
+            raise SetterException
+
+        ifaces = parse_verilog(solution_synthesized)
         for i in ifaces:
             write_interface(ifaces[i], "correction/yosys/solution/" + i + ".iface")
         write_interface(ifaces[top_module], "correction/yosys/solution/top_module.iface")
@@ -169,6 +180,7 @@ def parse_solution_interface_and_synth():
     except TimeoutError:
         logging.error('Yosys took too long to parse the file.')
         return False
+
     logging.info('End of solution interface parsing.')
     return ifaces[top_module]
 
@@ -184,7 +196,7 @@ def parse_submission_interface(top_module):
             top_module = parse_top_module("correction/yosys/submission/synthesis.stdout", "correction/yosys/submission/submission.v")
             if not top_module:
                 raise SubmissionException
-            
+
         write_interface(ifaces[top_module], "correction/yosys/submission/top_module.iface")
 
     except TimeoutError:

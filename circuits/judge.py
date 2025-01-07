@@ -21,20 +21,9 @@ def judge0 ():
     util.write_file('correction/correction.yml', 'veredict: IE\ninternal_error: very severe\n')
 
     logging.info('Preparing data structures')
+    
     inf = Record()
-    inf.dir = os.getcwd()
-        
-    try:
-        inf.hdl = util.read_yml(inf.dir+'/problem/handler.yml')
-        inf.pbm = util.read_yml(inf.dir+'/problem/problem.yml')
-        inf.iface = cvutil.parse_solution_interface_and_synth()
-        inf.sub = util.read_yml(inf.dir+'/submission/submission.yml')
-        inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')
-    except IOError:
-        logging.error("Error on data structures.")
-        logging.error('Writting problem error on correction/compilation2.txt.')
-        util.copy_file('correction/yosys/solution/yosys.stderr', 'correction/compilation2.txt') 
-        raise
+    inf.dir = os.getcwd()    
 
     inf.env = {
         'hostname': util.hostname(),
@@ -43,6 +32,17 @@ def judge0 ():
         'uname':    ' '.join(os.uname()),
         'loadavg':  "%.2f %.2f %.2f" % os.getloadavg(),
     }
+
+    try:
+        inf.hdl = util.read_yml(inf.dir+'/problem/handler.yml')
+        inf.pbm = util.read_yml(inf.dir+'/problem/problem.yml')
+        inf.sub = util.read_yml(inf.dir+'/submission/submission.yml')
+        inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')    
+    except IOError:
+        logging.error("Error on data structures.")
+        logging.error('Writting problem error on correction/compilation2.txt.')
+        util.copy_file('correction/yosys/solution/yosys.stderr', 'correction/compilation2.txt') 
+        raise
 
     inf.cor = {
         'submission':  inf.sub,
@@ -57,6 +57,20 @@ def judge0 ():
         'graph_files': [],
     }
     
+    try:
+        inf.iface = cvutil.parse_solution_interface_and_synth()
+    except cvutil.SetterException:
+        inf.cor['veredict'] = 'SE'
+        util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
+        raise
+    
+    except Exception as e:
+        logging.error('exception: ' + util.exc_traceback())
+        inf.cor['veredict'] = 'IE'
+        inf.cor['internal-error'] = 'exception'
+        inf.cor['traceback'] = util.exc_traceback()
+        raise
+    
     logging.info('Copying submision to /correction/program.v')
     util.copy_file('submission/program.v', 'correction/program.v') 
     
@@ -70,7 +84,7 @@ def judge0 ():
             c = interface()
             if c: # Run verifier only if interface matched
                 c = verification()
-                if c: collect_statistics_and_graphs()
+                collect_statistics_and_graphs()
                 
                 if not c:
                     logging.info('Error on submission verification.')
@@ -95,11 +109,11 @@ def judge0 ():
             inf.cor['trace_files'].append('correction/compilation1.txt')
             
     except cvutil.TimeoutException:
-        logging.info("Timeout exception catched.")
+        logging.error("Timeout exception catched.")
         inf.cor['veredict'] = 'EE'
         
     except cvutil.SubmissionException:
-        logging.info("Submission exception catched.")
+        logging.error("Submission exception catched.")
         inf.cor['veredict'] = 'CE'
         util.write_file('correction/compilation1.txt', 'Unable to find a module with content in your design.')
     

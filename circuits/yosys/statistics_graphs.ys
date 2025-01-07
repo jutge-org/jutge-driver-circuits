@@ -2,7 +2,7 @@ read_verilog -sv submission/program.v
 
 hierarchy -check -top top_module
 
-proc -noopt 
+proc -noopt
 
 write_json correction/yosys/submission/top_module.json
 

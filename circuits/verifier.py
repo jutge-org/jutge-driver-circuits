@@ -62,25 +62,27 @@ def parse_results ():
         
         destination_path, file_name = generate_clean_vcd(file_path)
         
+        svg_filename = "correction/traces/" + file_name + ".svg"
+        json_filename = "correction/traces/" + file_name + ".json"
+        
         try:
-            os.system('sootty "' + destination_path + '" -o > correction/traces/' + file_name + '.svg')
+            os.system('sootty "' + destination_path + '" -o > ' + svg_filename)
             
         except Exception as e:
-            logging.debug("Failed creating correction/traces/" + file_name + ".svg file.")
+            logging.debug("Failed creating " + svg_filename + " file.")
             logging.debug(e)
         
-        if (not util.file_empty("correction/traces/" + file_name + ".svg")):
-            logging.debug('File generated: correction/traces/' + file_name + '.svg')
+        if (util.file_exists(svg_filename) and not util.file_empty(svg_filename)):
+            logging.debug('File generated: ' + svg_filename)
             
         else:
-            util.del_file('correction/traces/' + file_name + '.svg')
+            util.del_file(svg_filename)
             try:
                 r = generate_json_from_vcd(file_path)
-                if (r): logging.debug('File generated: correction/traces/' + file_name + '.json')
+                if (r): logging.debug('File generated: ' + json_filename)
                 
             except Exception as e:
-            # else:
-                logging.debug("Failed creating correction/traces/" + file_name + ".json file.")
+                logging.debug("Failed creating " + json_filename)
                 logging.debug(e)
                 return False
 
@@ -101,17 +103,16 @@ def generate_clean_vcd(file_path):
     with open(file_path, 'r') as file:
         lines = file.readlines()
     
-    var_wire_pattern = re.compile(r"\$var wire (\d+) (n\d+) (\w+) \$end")
+    var_wire_pattern = re.compile(r"\$var wire (\d+) (n\d+) (\S+) \$end")
     scope_pattern = re.compile(r"\$scope module (\w+) \$end")
     upscope_pattern = re.compile(r"\$upscope \$end")
     enddefinitions_pattern = re.compile(r"\$enddefinitions \$end")
     wires_to_remove = ['t']
     filtered_lines = []
-    current_module = None
+    current_module = []
     inside_definitions = True
     
     for line in lines:
-        # print(line)
         if inside_definitions:
             if "timescale" in line:
                 filtered_lines.append(line)
@@ -122,24 +123,24 @@ def generate_clean_vcd(file_path):
                 wire_width = var_match.group(1)
                 wire_number = var_match.group(2)
                 wire_name = var_match.group(3)
-                # print(f"Wire number: {wire_number}, Wire name: {wire_name}, Module: {current_module}")
+
                 if (wire_name == 'okay'):
                     filtered_lines.append(line)
-                elif (current_module == None or wire_name.startswith('__') or wire_name.startswith('_DontCare_')
-                        or (current_module != 'gate' and current_module != 'gold')):
+                elif ((not current_module) or wire_name.startswith('__') or wire_name.startswith('_DontCare_')
+                        or (current_module[-1] != 'gate' and current_module[-1] != 'gold')):
                     wires_to_remove.append(wire_number)
                 else:
-                    modified_line = "$var wire " + wire_width + " " + wire_number + " " + current_module + "." + wire_name + " $end\n"
+                    modified_line = "$var wire " + wire_width + " " + wire_number + " " + current_module[-1] + "." + wire_name + " $end\n"
                     filtered_lines.append(modified_line)
                 continue
                 
             scope_match = scope_pattern.match(line)
             if scope_match:
-                current_module = scope_match.group(1)
+                current_module.append(scope_match.group(1))
                 filtered_lines.append(line)
 
             elif upscope_pattern.match(line):
-                current_module = None
+                if current_module: current_module.pop()
                 filtered_lines.append(line)
                     
             elif enddefinitions_pattern.match(line): 
@@ -169,20 +170,15 @@ def generate_json_from_vcd(file_path):
     
     input_names, output_names = parse_iface('correction/yosys/submission/' + str(strategy).split('.')[0] + '.iface') 
     
-    # print("inputs")
-    # print(input_names)
-    # print("outputs")
-    # print(output_names)
-    
     with open(file_path, 'r') as file:
         lines = file.readlines()
     
-    var_wire_pattern = re.compile(r"\$var wire \d+ (n\d+) (\w+) \$end")
+    var_wire_pattern = re.compile(r"\$var wire (\d+) (n\d+) (\S+) \$end")
     scope_pattern = re.compile(r"\$scope module (\w+) \$end")
     upscope_pattern = re.compile(r"\$upscope \$end")
     enddefinitions_pattern = re.compile(r"\$enddefinitions \$end")
 
-    current_module = None
+    current_module = []
     inside_definitions = True
     
     input_wires = {}
@@ -194,37 +190,34 @@ def generate_json_from_vcd(file_path):
     
     for line in lines:
         if inside_definitions:
-
             var_match = var_wire_pattern.match(line)
             if var_match:
-                wire_number = var_match.group(1)
-                wire_name = var_match.group(2)
-                # print(f"Wire number: {wire_number}, Wire name: {wire_name}, Module: {current_module}")
+                wire_number = var_match.group(2)
+                wire_name = var_match.group(3)
 
-                if (current_module == 'gold'):
+                if (current_module[-1] == 'gold'):
                     if (wire_name in input_names):
-                        # print(wire_name + " is input (gold) wire " + wire_number)
+                        # print("gold in " + str(wire_name) + " is "  + str(wire_number))
                         input_wires[wire_number] = wire_name
                     elif (wire_name in output_names):
-                        # print(wire_name + " is output gold " + wire_number)
+                        # print("gold out " + str(wire_name) + " is "  + str(wire_number))
                         output_gold_wires[wire_number] = wire_name
                         
-                elif (current_module == 'gate'):
+                elif (current_module[-1] == 'gate'):
                     if (wire_name in input_names):
-                        # print(wire_name + " is input (gate) wire " + wire_number)
+                        # print("gate in " + str(wire_name) + " is "  + str(wire_number))
                         input_wires[wire_number] = wire_name
                     elif (wire_name in output_names):
-                        # print(wire_name + " is output gate " + wire_number)
-                        output_gate_wires[wire_number] = wire_name
-                                   
+                        # print("gate out " + str(wire_name) + " is "  + str(wire_number))                    
+                        output_gate_wires[wire_number] = wire_name      
                 continue
                 
             scope_match = scope_pattern.match(line)
             if scope_match:
-                current_module = scope_match.group(1)
+                current_module.append(scope_match.group(1))
 
             elif upscope_pattern.match(line):
-                current_module = None
+                if current_module: current_module.pop()
                     
             elif enddefinitions_pattern.match(line): 
                 inside_definitions = False
@@ -243,7 +236,11 @@ def generate_json_from_vcd(file_path):
                     
                 elif (wire_number in output_gate_wires):
                     output_gate_values[output_gate_wires[wire_number]] = int(wire_value[1:], 2)
-                    
+
+    # print(input_wires)
+    # print(output_gold_wires)
+    # print(output_gate_wires)
+    
     if (not input_values and not output_gate_values and not output_gold_values):
         return False
     
