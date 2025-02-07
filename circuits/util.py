@@ -20,16 +20,15 @@ import getpass
 ##############################################################################
 
 
-def init_logging ():
+def init_logging():
     '''Configures basic logging options.'''
 
     logging.basicConfig(
-        format  = '%s@%s ' % (username(), hostname())
-            + '%(asctime)s' + ' [' + '%(levelname)s'+ '] ' +'%(message)s',
-        datefmt = '%Y-%m-%d %H:%M:%S',
+        format='%s@%s ' % (username(), hostname())
+        + '%(asctime)s' + ' [' + '%(levelname)s' + '] ' + '%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
     )
     logging.getLogger('').setLevel(logging.NOTSET)
-
 
 
 ##############################################################################
@@ -37,12 +36,12 @@ def init_logging ():
 ##############################################################################
 
 
-def username ():
+def username():
     '''Returns the username of the process owner.'''
     return getpass.getuser()
 
 
-def hostname ():
+def hostname():
     '''Returns the hostname of this computer.'''
     return socket.gethostname()
 
@@ -52,14 +51,14 @@ def hostname ():
 ##############################################################################
 
 
-def write_file (name, txt=''):
+def write_file(name, txt=''):
     '''Writes the file name with contents txt.'''
     f = open(name, 'w')
     f.write(txt)
     f.close()
 
 
-def read_file (name):
+def read_file(name):
     '''Returns a string with the contents of the file name.'''
     f = open(name)
     r = f.read()
@@ -67,14 +66,15 @@ def read_file (name):
     return r
 
 
-def del_file (name):
+def del_file(name):
     '''Deletes the file name. Does not complain on error.'''
     try:
         os.remove(name)
     except OSError:
         pass
-    
-def del_dir (name):
+
+
+def del_dir(name):
     '''Deletes a directory and its content. Does not complain on error.'''
     try:
         shutil.rmtree(name)
@@ -82,28 +82,29 @@ def del_dir (name):
         pass
 
 
-def tmp_file ():
+def tmp_file():
     '''Creates a temporal file and returns its name.'''
     return tempfile.mkstemp()[1]
 
 
-def file_exists (name):
+def file_exists(name):
     '''Tells wether file name exists.'''
     return os.path.exists(name)
 
 
-def file_empty (name):
+def file_empty(name):
     '''Tells wether file name exists.'''
     return os.stat(name).st_size == 0
 
-def copy_file (src, dst):
+
+def copy_file(src, dst):
     '''Copies a file from src to dst.'''
     shutil.copy(src, dst)
-    
+
+
 def move_file(src, dst):
     '''Moves a file from src to dst.'''
     shutil.move(src, dst)
-
 
 
 ##############################################################################
@@ -129,7 +130,7 @@ def read_yml(path):
 ##############################################################################
 
 
-def mkdir (name):
+def mkdir(name):
     '''Makes the directory name. Does not complain on error.'''
     try:
         os.makedirs(name)
@@ -142,7 +143,7 @@ def mkdir (name):
 ##############################################################################
 
 
-def current_time ():
+def current_time():
     '''Returns a string with out format for times.'''
     return time.strftime('%Y-%m-%d %H:%M:%S')
 
@@ -152,7 +153,7 @@ def current_time ():
 ##############################################################################
 
 
-def exc_traceback ():
+def exc_traceback():
     '''Similar to traceback.print_exc but return a string rather than printing it.'''
 
     path = tmp_file()

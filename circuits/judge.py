@@ -9,21 +9,23 @@ import verifier
 
 
 class Record:
-	pass
+    pass
 
-def judge0 ():
+
+def judge0():
     global inf
 
     logging.info('Start of judge0()')
     create_directory_structure()
 
     logging.info('Writing dummy correction.yml with generic internal error')
-    util.write_file('correction/correction.yml', 'veredict: IE\ninternal_error: very severe\n')
+    util.write_file('correction/correction.yml',
+                    'veredict: IE\ninternal_error: very severe\n')
 
     logging.info('Preparing data structures')
-    
+
     inf = Record()
-    inf.dir = os.getcwd()    
+    inf.dir = os.getcwd()
 
     inf.env = {
         'hostname': util.hostname(),
@@ -37,11 +39,12 @@ def judge0 ():
         inf.hdl = util.read_yml(inf.dir+'/problem/handler.yml')
         inf.pbm = util.read_yml(inf.dir+'/problem/problem.yml')
         inf.sub = util.read_yml(inf.dir+'/submission/submission.yml')
-        inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')    
+        inf.drv = util.read_yml(inf.dir+'/driver/driver.yml')
     except IOError:
         logging.error("Error on data structures.")
         logging.error('Writting problem error on correction/compilation2.txt.')
-        util.copy_file('correction/yosys/solution/yosys.stderr', 'correction/compilation2.txt') 
+        util.copy_file('correction/yosys/solution/yosys.stderr',
+                       'correction/compilation2.txt')
         raise
 
     inf.cor = {
@@ -56,74 +59,80 @@ def judge0 ():
         'trace_files': [],
         'graph_files': [],
     }
-    
+
     try:
         inf.iface = cvutil.parse_solution_interface_and_synth()
     except cvutil.SetterException:
         inf.cor['veredict'] = 'SE'
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
         raise
-    
+
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
         inf.cor['veredict'] = 'IE'
         inf.cor['internal-error'] = 'exception'
         inf.cor['traceback'] = util.exc_traceback()
         raise
-    
+
     logging.info('Copying submision to /correction/program.v')
-    util.copy_file('submission/program.v', 'correction/program.v') 
-    
+    util.copy_file('submission/program.v', 'correction/program.v')
+
     try:
         c = synthesis()
         inf.env['time_end'] = util.current_time()
         util.write_yml(inf.dir+'/correction/correction.yml', inf.cor)
 
-        if c: # Run correction only if synthesis was successful
+        if c:  # Run correction only if synthesis was successful
             logging.info('Start of correction step.')
             c = interface()
-            if c: # Run verifier only if interface matched
+            if c:  # Run verifier only if interface matched
                 c = verification()
                 collect_statistics_and_graphs()
-                
+
                 if not c:
                     logging.info('Error on submission verification.')
                     logging.info('Writting traces to correction/.')
                     move_trace_files()
-                    
+
             else:
                 logging.info('Error on submission interface.')
-                logging.info('Writting interface differences on correction/interface.diff.')
-                util.write_file('correction/compilation1.txt', 'Interface mismatch.')
-                util.copy_file('correction/interface.txt', 'correction/interface.diff')
+                logging.info(
+                    'Writting interface differences on correction/interface.diff.')
+                util.write_file('correction/compilation1.txt',
+                                'Interface mismatch.')
+                util.copy_file('correction/interface.txt',
+                               'correction/interface.diff')
                 inf.cor['trace_files'].append('correction/interface.diff')
-                
+
             cleanup()
-                
+
             inf.env['time_end'] = util.current_time()
             logging.info('End of correction step.')
         else:
             logging.info('Synthesis was not successfull.')
-            logging.info('Writting synthesis error on correction/compilation1.txt.')
-            util.copy_file('correction/yosys/submission/synthesis.stderr', 'correction/compilation1.txt') 
+            logging.info(
+                'Writting synthesis error on correction/compilation1.txt.')
+            util.copy_file(
+                'correction/yosys/submission/synthesis.stderr', 'correction/compilation1.txt')
             inf.cor['trace_files'].append('correction/compilation1.txt')
-            
+
     except cvutil.TimeoutException:
         logging.error("Timeout exception catched.")
         inf.cor['veredict'] = 'EE'
-        
+
     except cvutil.SubmissionException:
         logging.error("Submission exception catched.")
         inf.cor['veredict'] = 'CE'
-        util.write_file('correction/compilation1.txt', 'Unable to find a module with content in your design.')
-    
+        util.write_file('correction/compilation1.txt',
+                        'Unable to find a module with content in your design.')
+
     except Exception as e:
         logging.error('exception: ' + util.exc_traceback())
         inf.cor['veredict'] = 'IE'
         inf.cor['internal-error'] = 'exception'
         inf.cor['traceback'] = util.exc_traceback()
         raise
-    
+
     finally:
         logging.info('Veredict: ' + inf.cor['veredict'])
         logging.info('Writing correction')
@@ -132,30 +141,30 @@ def judge0 ():
         logging.info('End of judge0()')
 
 
-def synthesis ():
+def synthesis():
     """Run the synthesizer on the student's file."""
     global inf
 
     logging.info('Start of synthesis process.')
     try:
-        try:    
-            cvutil.execute_with_timeout('yosys', 'driver/yosys/yosys_submission_synthesis.ys', 
-                                 stdout="correction/yosys/submission/synthesis.stdout", 
-                                 stderr="correction/yosys/submission/synthesis.stderr")
+        try:
+            cvutil.execute_with_timeout('yosys', 'driver/yosys/yosys_submission_synthesis.ys',
+                                        stdout="correction/yosys/submission/synthesis.stdout",
+                                        stderr="correction/yosys/submission/synthesis.stderr")
         except TimeoutError:
             return False
 
         ok = util.file_empty('correction/yosys/submission/synthesis.stderr')
-        
+
         if not ok:
             inf.cor['veredict'] = 'CE'
-            
+
         return ok
 
     finally:
         logging.info('End of synthesis process.')
-        
-        
+
+
 def interface():
     """Check wheter the student's module interface matches that of the teacher."""
     global inf
@@ -165,54 +174,57 @@ def interface():
         cvutil.parse_submission_interface(inf.iface.name)
 
         # Use diff to stop if any differences are found
-        r = os.system('diff correction/yosys/solution/top_module.iface correction/yosys/submission/top_module.iface > correction/interface.txt')
+        r = os.system(
+            'diff correction/yosys/solution/top_module.iface correction/yosys/submission/top_module.iface > correction/interface.txt')
         r = os.WEXITSTATUS(r)
-        if r == 0: # No differences were found
+        if r == 0:  # No differences were found
             return True
-        elif r == 1: # Some differences found
+        elif r == 1:  # Some differences found
             inf.cor['veredict'] = 'CE'
             return False
         else:
             raise Exception(util.read_file('interface.txt'))
     except cvutil.SubmissionException:
-        logging.info('Submission error on interface checking. Unable to locate top module.')
+        logging.info(
+            'Submission error on interface checking. Unable to locate top module.')
         raise cvutil.SubmissionException
-    
+
     finally:
         logging.info('End of interface verification')
 
 
-def verification ():
+def verification():
     """Run the verifier."""
     global inf
     logging.info('Start of verification process.')
-    
+
     try:
         logging.info("Invoking model verifier")
         r = verifier.prepare_verifier(inf.iface.name)
         if not r:
             raise Exception("Error on verifier preparation")
-        
+
         r = verifier.execute_verifier(inf.iface.name)
         logging.info("Creating verdict.")
-        
+
         if r:
             inf.cor['veredict'] = 'AC'
             logging.info("Accepted answer.")
             return True
         else:
-            inf.cor['veredict'] = 'WA'    
+            inf.cor['veredict'] = 'WA'
             logging.info("Wrong answer, parsing verifier results.")
             r = verifier.parse_results()
             logging.info("Results trace generated.")
             return False
-        
+
     except cvutil.TimeoutException:
         logging.info("Verification took too long.")
         raise cvutil.TimeoutException
-    
+
     finally:
         logging.info('End of verification process')
+
 
 def collect_statistics_and_graphs():
     """Collects the statistical values from the solution and submission and 
@@ -222,23 +234,30 @@ def collect_statistics_and_graphs():
 
     try:
         inf.cor['graph_files'] = cvutil.get_submission_stats_and_graphs()
-        
+
     finally:
         logging.info('End of collect_statistics()')
 
-def get (opt, default=None):
+
+def get(opt, default=None):
     global inf
     val = None
-    if opt in inf.sub: val, whe = inf.sub[opt], 'submission'
-    elif opt in inf.pbm: val, whe = inf.pbm[opt], 'problem'
-    elif opt in inf.drv: val, whe = inf.drv[opt], 'driver'
-    elif opt in inf.hdl: val, whe = inf.hdl[opt], 'handler'
-    else: val, whe = default, 'default'
+    if opt in inf.sub:
+        val, whe = inf.sub[opt], 'submission'
+    elif opt in inf.pbm:
+        val, whe = inf.pbm[opt], 'problem'
+    elif opt in inf.drv:
+        val, whe = inf.drv[opt], 'driver'
+    elif opt in inf.hdl:
+        val, whe = inf.hdl[opt], 'handler'
+    else:
+        val, whe = default, 'default'
     if val is None:
         raise Exception('missing option (%s)' % opt)
 
     logging.info('using value %s for option %s from %s' % (str(val), opt, whe))
     return val
+
 
 def move_trace_files():
     """Move the generate trace files into correction/ folder."""
@@ -246,8 +265,10 @@ def move_trace_files():
     logging.info('Start of move_trace_files()')
 
     try:
-        svg_files = [f for f in os.listdir('correction/traces/') if f.endswith('.svg')]
-        json_files = [f for f in os.listdir('correction/traces/') if f.endswith('.json')]
+        svg_files = [f for f in os.listdir(
+            'correction/traces/') if f.endswith('.svg')]
+        json_files = [f for f in os.listdir(
+            'correction/traces/') if f.endswith('.json')]
 
         for i, file in enumerate(svg_files, start=1):
             src_path = os.path.join('correction/traces/', file)
@@ -262,11 +283,12 @@ def move_trace_files():
             util.move_file(src_path, dest_path)
             logging.info('Moving ' + src_path + ' to ' + dest_path + '.')
             inf.cor['trace_files'].append(dest_path)
-        
+
     finally:
         logging.info('End of move_trace_files()')
 
-def cleanup ():
+
+def cleanup():
     """Delete files that are unnecessary if all went well."""
     global inf
     logging.info('Start of cleanup()')
@@ -277,6 +299,7 @@ def cleanup ():
         util.del_file('driver/yosys/' + inf.iface.name + '.eqy')
     finally:
         logging.info('End of cleanup()')
+
 
 def dump_cleanup():
     """Delete files all the stack trace from yosys."""
@@ -294,6 +317,7 @@ def create_directory_structure():
     util.mkdir("correction/yosys/submission")
     util.mkdir("correction/graphs")
     util.mkdir("correction/yosys/solution")
+
 
 if __name__ == '__main__':
     os.environ["PATH"] += os.pathsep + "/opt/oss-cad-suite/bin"
