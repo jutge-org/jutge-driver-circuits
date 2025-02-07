@@ -74,17 +74,17 @@ def parse_results ():
         
         if (util.file_exists(svg_filename) and not util.file_empty(svg_filename)):
             logging.debug('File generated: ' + svg_filename)
-            
         else:
             util.del_file(svg_filename)
-            try:
-                r = generate_json_from_vcd(file_path)
-                if (r): logging.debug('File generated: ' + json_filename)
-                
-            except Exception as e:
-                logging.debug("Failed creating " + json_filename)
-                logging.debug(e)
-                return False
+            
+        try:
+            r = generate_json_from_vcd(file_path)
+            if (r): logging.debug('File generated: ' + json_filename)
+            
+        except Exception as e:
+            logging.debug("Failed creating " + json_filename)
+            logging.debug(e)
+            return False
 
     return True
 
@@ -93,10 +93,10 @@ def find_vcd_files():
     induct_traces = subprocess.run(["find", "correction/", "-name", "trace_induct.vcd"], capture_output=True, text=True)
     traces = subprocess.run(["find", "correction/", "-name", "trace.vcd"], capture_output=True, text=True)
     result = str.splitlines(induct_traces.stdout.strip()) + str.splitlines(traces.stdout.strip())
-    
+
     if result == "":
         return None
-      
+
     return result
 
 def generate_clean_vcd(file_path):
@@ -164,96 +164,129 @@ def generate_clean_vcd(file_path):
         
     return destination_path, strategy
 
+
 def generate_json_from_vcd(file_path):
+    # Determine strategy and destination path
     strategy = file_path.split('strategies/')[1].split('/')[0]
     destination_path = "correction/traces/" + strategy + ".json"
     
-    input_names, output_names = parse_iface('correction/yosys/submission/' + str(strategy).split('.')[0] + '.iface') 
+    # Retrieve the interface names (assumed to return lists of names)
+    input_names, output_names = parse_iface('correction/yosys/submission/' + str(strategy).split('.')[0] + '.iface')
     
     with open(file_path, 'r') as file:
         lines = file.readlines()
     
+    # Regular expressions for parsing the VCD file
     var_wire_pattern = re.compile(r"\$var wire (\d+) (n\d+) (\S+) \$end")
     scope_pattern = re.compile(r"\$scope module (\w+) \$end")
     upscope_pattern = re.compile(r"\$upscope \$end")
     enddefinitions_pattern = re.compile(r"\$enddefinitions \$end")
-
+    
     current_module = []
     inside_definitions = True
     
+    # Dictionaries to map wire numbers to signal names
     input_wires = {}
     output_gold_wires = {}
     output_gate_wires = {}
-    input_values = {}
-    output_gold_values = {}
-    output_gate_values = {}
     
+    # Dictionary to track signal values over time (by wire number)
+    signal_values = {}
+
+    timestamps = []
+    
+    # Process the file line by line
     for line in lines:
         if inside_definitions:
             var_match = var_wire_pattern.match(line)
             if var_match:
                 wire_number = var_match.group(2)
                 wire_name = var_match.group(3)
-
-                if (current_module[-1] == 'gold'):
-                    if (wire_name in input_names):
-                        # print("gold in " + str(wire_name) + " is "  + str(wire_number))
+    
+                # Depending on the current module, assign the wire if it is part of the interface.
+                if current_module and current_module[-1] == 'gold':
+                    if wire_name in input_names:
                         input_wires[wire_number] = wire_name
-                    elif (wire_name in output_names):
-                        # print("gold out " + str(wire_name) + " is "  + str(wire_number))
+                    elif wire_name in output_names:
                         output_gold_wires[wire_number] = wire_name
-                        
-                elif (current_module[-1] == 'gate'):
-                    if (wire_name in input_names):
-                        # print("gate in " + str(wire_name) + " is "  + str(wire_number))
+                elif current_module and current_module[-1] == 'gate':
+                    if wire_name in input_names:
                         input_wires[wire_number] = wire_name
-                    elif (wire_name in output_names):
-                        # print("gate out " + str(wire_name) + " is "  + str(wire_number))                    
-                        output_gate_wires[wire_number] = wire_name      
+                    elif wire_name in output_names:
+                        output_gate_wires[wire_number] = wire_name
+    
+                # Initialize tracking for this wire
+                signal_values[wire_number] = []
                 continue
-                
+    
             scope_match = scope_pattern.match(line)
             if scope_match:
                 current_module.append(scope_match.group(1))
-
             elif upscope_pattern.match(line):
-                if current_module: current_module.pop()
-                    
-            elif enddefinitions_pattern.match(line): 
+                if current_module:
+                    current_module.pop()
+            elif enddefinitions_pattern.match(line):
                 inside_definitions = False
-
         else:
-            split_line = line.split(' ')
-            if (len(split_line) == 2):
-                wire_value = split_line[0].strip()
-                wire_number = split_line[1].strip()
-                
-                if (wire_number in input_wires):
-                    input_values[input_wires[wire_number]] = int(wire_value[1:], 2)
-                    
-                elif (wire_number in output_gold_wires):
-                    output_gold_values[output_gold_wires[wire_number]] = int(wire_value[1:], 2)
-                    
-                elif (wire_number in output_gate_wires):
-                    output_gate_values[output_gate_wires[wire_number]] = int(wire_value[1:], 2)
+            # If timestamp marker (e.g. "#0", "#5",...)
+            if line.startswith('#'):
+                timestamps.append(int(line[1:]))
+    
+                # Extend the signals' list with the previous value
+                for wire in signal_values:
+                    if len(signal_values[wire]) < len(timestamps):
+                        prev = signal_values[wire][-1] if signal_values[wire] else -1
+                        signal_values[wire].append(prev)
+            else:
+                # Process value-change lines (format "b<value> <wire_number>")
+                parts = line.split()
+                if len(parts) == 2:
+                    wire_val = parts[0].strip()
+                    wire_number = parts[1].strip()
+                    value = int(wire_val[1:], 2)  # convert binary string to integer
+    
+                    # Update the last value for this wire 
+                    if wire_number in signal_values:
+                        if signal_values[wire_number]:
+                            signal_values[wire_number][-1] = value
+                        else:
+                            signal_values[wire_number].append(value) # Initializes if no previous value
+    
+    
+    # Build dictionaries mapping signal names to their arrays of values
+    input_values = { input_wires[w]: signal_values[w][:-1] for w in input_wires if w in signal_values }
+    output_gold_values = { output_gold_wires[w]: signal_values[w][:-1] for w in output_gold_wires if w in signal_values }
+    output_gate_values = { output_gate_wires[w]: signal_values[w][:-1] for w in output_gate_wires if w in signal_values }
+    
+    # Determine circuit type
+    if "clk" in list(input_values.keys()):
+        circuit_type = "sequential"
+    else:
+        circuit_type = "combinational"
+        input_values = {k: v[0] for k, v in input_values.items()}
+        output_gold_values = {k: v[0] for k, v in output_gold_values.items()}
+        output_gate_values = {k: v[0] for k, v in output_gate_values.items()}
 
-    # print(input_wires)
-    # print(output_gold_wires)
-    # print(output_gate_wires)
-    
-    if (not input_values and not output_gate_values and not output_gold_values):
-        return False
-    
+    # Signals that don't match
+    differing_signals = [
+        signal for signal in output_gold_values.keys()
+        if output_gold_values[signal] != output_gate_values.get(signal)
+    ]
+
+    # Build the final JSON data structure
     data = {
+        "type": circuit_type,
         "input": input_values,
         "output": output_gate_values,
         "expected": output_gold_values,
+        "errors": differing_signals
     }
 
     with open(destination_path, 'w') as file:
         json.dump(data, file, indent=2)
     
     return True
+
 
 def parse_iface(file_path):
     input_list = []
