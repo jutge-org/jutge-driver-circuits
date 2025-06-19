@@ -9,8 +9,21 @@ import subprocess
 import cvutil
 import util
 
-# Maximum time to wait for the verifier to finish
-MAX_VERIFICATION_TIME = 20
+# Default values for verification
+DEFAULT_MAX_VERIFICATION_TIME = 30
+DEFAULT_ENGINE = "smtbmc"
+DEFAULT_SOLVER = "z3"
+DEFAULT_DEPTH = "10"
+
+# Accepted engines, solvers, and depth
+# https://yosyshq.readthedocs.io/projects/eqy/en/latest/strategies.html
+ENGINES = {
+    "smtbmc": ("bitwuzla", "z3", "cvc5", "yices"),
+    "aiger": ("suprove",),
+    "abc": ("pdr",)
+}
+MIN_DEPTH = 1
+MAX_DEPTH = 100
 
 # Exceptions:
 
@@ -18,21 +31,58 @@ MAX_VERIFICATION_TIME = 20
 class VerificationTooLong (Exception):
     pass
 
+def prepare_verifier(module, hdl):
+    engine=hdl.get("engine", DEFAULT_ENGINE),
+    solver=hdl.get("solver", DEFAULT_SOLVER),
+    depth=hdl.get("depth", DEFAULT_DEPTH)
+    
+    # Validate selected engine and solver
+    if engine not in ENGINES:
+        logging.warning(f"Invalid engine '{engine}' (or not defined). Falling back to default engine '{DEFAULT_ENGINE}' and solver '{DEFAULT_SOLVER}'.")
+        engine = DEFAULT_ENGINE
+        solver = DEFAULT_SOLVER
+    elif solver not in ENGINES[engine]:
+        solver = ENGINES[engine][0] # Expected to exists at least 1 solver for each engine
+        logging.warning(f"Invalid solver '{solver}' for engine '{engine}'. Falling back to '{solver}'.")
 
-def prepare_verifier(module):
-    with open('driver/yosys/top_module.eqy', 'r') as file:
-        content = file.read()
+    # Validate selected depth
+    try:
+        depth_int = int(depth)
+        if not (MIN_DEPTH <= depth_int <= MAX_DEPTH):
+            logging.warning(f"Depth {depth_int} out of range [{MIN_DEPTH}-{MAX_DEPTH}]. Using default '{DEFAULT_DEPTH}'.")
+            depth = DEFAULT_DEPTH
+    except ValueError:
+        logging.warning(f"Depth '{depth}' is not a valid integer. Using default '{DEFAULT_DEPTH}'.")
+        depth = DEFAULT_DEPTH
 
-    prepared_test_file = content.replace("top_module", module)
-    prepared_test_path = 'driver/yosys/' + module + '.eqy'
 
-    with open(prepared_test_path, 'w') as file:
-        file.write(prepared_test_file)
+    # Perform changes on the template top_module.eqy file
+    template_path = 'driver/yosys/top_module.eqy'
+    prepared_test_path = f'driver/yosys/{module}.eqy'
+
+    try:
+        with open(template_path, 'r') as file:
+            content = file.read()
+
+        content = content.replace("top_module", module)
+        content = content.replace("%engine%", engine)
+        content = content.replace("%solver%", solver)
+        content = content.replace("%depth%", str(depth))
+
+        os.makedirs(os.path.dirname(prepared_test_path), exist_ok=True)
+        with open(prepared_test_path, 'w') as file:
+            file.write(content)
+        
+        logging.info(f"Succesfully set parameters on template top_module.eqy: {prepared_test_path}")
+
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during top_module.eqy tailoring: {e}")
+        return False
 
     return util.file_exists(prepared_test_path)
 
 
-def execute_verifier(module):
+def execute_verifier(module, timeout=DEFAULT_MAX_VERIFICATION_TIME):
     """Executes Eqy to verify model, redirecting output to stdout and limiting the execution time."""
     logging.info("Start of Yosys-Eqy execution.")
 
@@ -40,7 +90,7 @@ def execute_verifier(module):
     test_file_path = '../driver/yosys/' + module + '.eqy'
 
     cvutil.execute_with_timeout('eqy', test_file_path,
-                                timeout=300,
+                                timeout=timeout,
                                 stdout="yosys/eqy.stdout",
                                 stderr="yosys/eqy.stderr")
 

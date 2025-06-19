@@ -16,5 +16,5 @@ delete *_DontCare*
 
 [strategy induction]
 use sby
-depth 10
-engine smtbmc z3
+depth %depth%
+engine %engine% %solver%

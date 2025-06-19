@@ -7,7 +7,6 @@ import util
 import cvutil
 import verifier
 
-
 class Record:
     pass
 
@@ -200,11 +199,12 @@ def verification():
 
     try:
         logging.info("Invoking model verifier")
-        r = verifier.prepare_verifier(inf.iface.name)
+        r = verifier.prepare_verifier(inf.iface.name, inf.hdl)
         if not r:
             raise Exception("Error on verifier preparation")
-
-        r = verifier.execute_verifier(inf.iface.name)
+        
+        timeout=inf.hdl.get("timeout", verifier.DEFAULT_MAX_VERIFICATION_TIME)
+        r = verifier.execute_verifier(inf.iface.name, timeout=timeout)
         logging.info("Creating verdict.")
 
         if r:

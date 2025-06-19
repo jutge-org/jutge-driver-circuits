@@ -9,11 +9,10 @@ import subprocess
 import time
 import util
 
-# Default timeout for an executed command
-DEFAULT_TIMEOUT = 20
+# Default values for synthesis
+DEFAULT_MAX_SYNTHESIS_TIME = 20
 
 # Exceptions
-
 
 class TimeoutException (Exception):
     pass
@@ -334,7 +333,7 @@ def get_submission_stats_and_graphs():
     return output_paths
 
 
-def execute_with_timeout(cmd, args, timeout=DEFAULT_TIMEOUT, stdout=None, stderr=None):
+def execute_with_timeout(cmd, args, timeout=DEFAULT_MAX_SYNTHESIS_TIME, stdout=None, stderr=None):
     """Executes the command cmd with arguments args, limiting the execution time."""
     logging.info("Executing '" + cmd + " " + args + "'")
 
