@@ -32,9 +32,9 @@ class VerificationTooLong (Exception):
     pass
 
 def prepare_verifier(module, hdl):
-    engine=hdl.get("engine", DEFAULT_ENGINE),
-    solver=hdl.get("solver", DEFAULT_SOLVER),
-    depth=hdl.get("depth", DEFAULT_DEPTH)
+    engine = hdl.get("engine", DEFAULT_ENGINE)
+    solver = hdl.get("solver", DEFAULT_SOLVER)
+    depth = hdl.get("depth", DEFAULT_DEPTH)
     
     # Validate selected engine and solver
     if engine not in ENGINES:
@@ -42,8 +42,9 @@ def prepare_verifier(module, hdl):
         engine = DEFAULT_ENGINE
         solver = DEFAULT_SOLVER
     elif solver not in ENGINES[engine]:
-        solver = ENGINES[engine][0] # Expected to exists at least 1 solver for each engine
-        logging.warning(f"Invalid solver '{solver}' for engine '{engine}'. Falling back to '{solver}'.")
+        corrected_solver = ENGINES[engine][0] # Expected to exists at least 1 solver for each engine
+        logging.warning(f"Invalid solver '{solver}' for engine '{engine}'. Falling back to '{corrected_solver}'.")
+        solver = corrected_solver
 
     # Validate selected depth
     try:
